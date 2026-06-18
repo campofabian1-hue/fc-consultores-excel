@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encuesta de Interés — FC Consultores</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- ══ FIREBASE ══ -->
+<script type="module">
+import { initializeApp }     from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
+import { getFirestore, collection, addDoc, serverTimestamp }
+                             from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+import { getAnalytics, logEvent } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-analytics.js';
+
+// 🔧 MISMA CONFIG QUE EL LANDING
+const firebaseConfig = {
+  apiKey:            "AIzaSyCfIeVBVkuVLRmNOFzm_yDpUb-6K7VP6bg",
+  authDomain:        "fc-consultores-excel.firebaseapp.com",
+  projectId:         "fc-consultores-excel",
+  storageBucket:     "fc-consultores-excel.firebasestorage.app",
+  messagingSenderId: "1006107014654",
+  appId:             "1:1006107014654:web:f7ddb40ed7bd9ebab93caf",
+  measurementId:     "G-G5Y6JJNNRK"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+let analytics;
+try { analytics = getAnalytics(app); } catch(e) {}
+
+window.guardarEncuesta = async (respuestas) => {
+  try {
+    const docRef = await addDoc(collection(db, 'encuestas'), {
+      ...respuestas,
+      timestamp:  serverTimestamp(),
+      fuente:     'pagina-encuesta',
+      url:        window.location.href,
+    });
+    if (analytics) logEvent(analytics, 'generate_lead', { source: 'encuesta' });
+    return { ok: true, id: docRef.id };
+  } catch (err) {
+    console.error('Firebase:', err);
+    return { ok: false, err: err.message };
+  }
+};
+</script>
+
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: { fc:{ green:'#1F5C2E',green2:'#2D7A3E',green3:'#3D9B52',terra:'#C2461A',terra2:'#D95A28',cream:'#F8F7F4',dark:'#1A1A1A',mid:'#4A4A4A',muted:'#7A7A7A',border:'#E2E2DC' } },
+    fontFamily:{ display:['"Playfair Display"','Georgia','serif'],body:['Inter','system-ui','sans-serif'] }
+  }}
+}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box} html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:#F8F7F4;color:#1A1A1A}
+.skip-link{position:absolute;left:-9999px} .skip-link:focus{left:16px;top:16px;z-index:9999;background:#1F5C2E;color:#fff;padding:8px 16px;border-radius:4px}
+.dot-grid{background-image:radial-gradient(circle,rgba(255,255,255,.18) 1px,transparent 1px);background-size:24px 24px}
+.fc-check{display:none}
+.fc-check+label{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid #E2E2DC;border-radius:10px;cursor:pointer;transition:border-color .18s,background .18s;font-size:14px;color:#1A1A1A}
+.fc-check+label::before{content:'';flex-shrink:0;width:18px;height:18px;border-radius:4px;border:2px solid #d0d0ca;background:#fff;margin-top:1px;transition:border-color .18s,background .18s}
+.fc-check[type=radio]+label::before{border-radius:50%}
+.fc-check:checked+label{border-color:#1F5C2E;background:#f0f7f2}
+.fc-check:checked+label::before{background:#1F5C2E;border-color:#1F5C2E;background-image:url("data:image/svg+xml,%3Csvg width='10' height='8' viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l3 3 5-6' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+.fc-check:focus-visible+label{outline:3px solid #3D9B52;outline-offset:2px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:#d0d0ca;transition:background .2s,transform .2s}
+.step-dot.done{background:#1F5C2E} .step-dot.active{background:#1F5C2E;transform:scale(1.4)}
+.reveal{opacity:0;transform:translateY(16px);transition:opacity .5s ease-out,transform .5s ease-out} .reveal.visible{opacity:1;transform:translateY(0)}
+.fc-input{width:100%;border:1.5px solid #E2E2DC;border-radius:8px;padding:10px 14px;font-size:14px;background:#fff;color:#1A1A1A;transition:border-color .18s}
+.fc-input:focus{outline:none;border-color:#1F5C2E} .fc-input::placeholder{color:#9a9a9a}
+#progress-bar{transition:width .4s ease-out}
+@media(prefers-reduced-motion:reduce){.reveal,.fc-check+label,.step-dot,#progress-bar{transition:none}}
+</style>
+</head>
+<body class="min-h-screen">
+<a href="#main" class="skip-link">Saltar al formulario</a>
+
+<header class="sticky top-0 z-40 bg-white border-b border-fc-border shadow-sm">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+    <a href="fc-landing-curso-excel.html" class="flex items-center gap-2">
+      <span class="w-8 h-8 rounded-md bg-fc-green flex items-center justify-center text-white font-bold text-sm">FC</span>
+      <span class="font-semibold text-fc-dark text-sm sm:text-base">FC Consultores</span>
+    </a>
+    <span id="step-label" class="text-xs text-fc-muted">Paso 1 de 5</span>
+  </div>
+  <div class="h-1 bg-fc-cream" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20">
+    <div id="progress-bar" class="h-full bg-fc-green" style="width:20%"></div>
+  </div>
+</header>
+
+<div class="bg-fc-green">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 h-8 flex items-center">
+    <ol class="flex items-center gap-1.5 text-xs text-green-200">
+      <li><a href="fc-landing-curso-excel.html" class="hover:text-white transition-colors">Inicio</a></li>
+      <li>/</li><li class="text-white font-medium">Encuesta de interés</li>
+    </ol>
+  </div>
+</div>
+
+<main id="main" class="max-w-4xl mx-auto px-4 sm:px-6 py-8 grid lg:grid-cols-3 gap-8">
+
+  <!-- SIDEBAR -->
+  <aside class="hidden lg:block space-y-5">
+    <!-- Hero con imagen real -->
+    <div class="rounded-xl overflow-hidden relative" style="min-height:220px">
+      <img src="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=500&q=85&fit=crop&crop=faces,top"
+        alt="Profesional colombiana con apuntes"
+        class="w-full object-cover absolute inset-0" style="min-height:220px;height:100%" loading="eager" width="500" height="280">
+      <div class="absolute inset-0 bg-gradient-to-b from-fc-green/80 via-fc-green/60 to-fc-green/80"></div>
+      <div class="absolute inset-0 dot-grid opacity-30"></div>
+      <div class="relative z-10 p-5">
+        <p class="text-green-300 text-xs font-semibold uppercase tracking-widest mb-2">FC Consultores</p>
+        <h2 class="font-display text-xl font-bold text-white leading-tight mb-3">
+          Ayúdanos a<br>diseñar <em class="not-italic text-fc-terra2">tu</em><br>programa ideal
+        </h2>
+        <p class="text-green-100 text-xs leading-relaxed">5 preguntas · 3 minutos · Respuesta personalizada garantizada</p>
+      </div>
+    </div>
+
+    <!-- Steps tracker -->
+    <div class="bg-white rounded-xl border border-fc-border p-5">
+      <h3 class="text-fc-dark font-semibold text-sm mb-4">Tu progreso</h3>
+      <ol class="space-y-3">
+        <li class="flex items-center gap-3" id="si-1"><div class="step-dot active flex-shrink-0"></div><span class="text-sm text-fc-dark font-medium">Tu perfil</span></li>
+        <li class="flex items-center gap-3" id="si-2"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Nivel en Excel</span></li>
+        <li class="flex items-center gap-3" id="si-3"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Modalidad y horario</span></li>
+        <li class="flex items-center gap-3" id="si-4"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Inversión</span></li>
+        <li class="flex items-center gap-3" id="si-5"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Tus datos</span></li>
+      </ol>
+    </div>
+
+    <!-- Quote -->
+    <div class="bg-fc-terra rounded-xl p-4 relative overflow-hidden">
+      <div class="absolute inset-0" style="background-image:radial-gradient(circle,rgba(255,255,255,.15) 1px,transparent 1px);background-size:16px 16px"></div>
+      <blockquote class="relative z-10 text-orange-100 text-xs leading-relaxed italic">
+        "En Nariño también se toman las decisiones con datos. Solo hay que saber leerlos."
+      </blockquote>
+      <p class="relative z-10 text-orange-300 text-[10px] mt-2 font-medium not-italic">— FC Consultores</p>
+    </div>
+  </aside>
+
+  <!-- FORM -->
+  <div class="lg:col-span-2">
+    <form id="survey-form" novalidate>
+
+      <!-- STEP 1 -->
+      <fieldset class="step-section" id="step-1">
+        <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+          <legend class="text-base font-semibold text-fc-dark mb-1 block">Tu perfil profesional</legend>
+          <p class="text-sm text-fc-muted mb-5">Cuéntanos sobre ti para recomendarte el módulo ideal.</p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-fc-dark mb-2" for="profesion">¿Cuál es tu profesión o área?</label>
+            <select id="profesion" name="profesion" class="fc-input">
+              <option value="">Selecciona una opción</option>
+              <option>Administrador de Empresas</option>
+              <option>Contador Público</option>
+              <option>Economista</option>
+              <option>Estudiante universitario</option>
+              <option>Gerente o directivo</option>
+              <option>Analista financiero</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <p class="text-sm font-medium text-fc-dark mb-2">¿Cuál es tu principal objetivo?</p>
+            <div class="space-y-2">
+              <div><input type="radio" class="fc-check" name="objetivo" id="obj1" value="reportes"><label for="obj1">Optimizar mis reportes financieros</label></div>
+              <div><input type="radio" class="fc-check" name="objetivo" id="obj2" value="proyectos"><label for="obj2">Evaluar proyectos de inversión (VPN/TIR)</label></div>
+              <div><input type="radio" class="fc-check" name="objetivo" id="obj3" value="automatizar"><label for="obj3">Automatizar tareas repetitivas con macros</label></div>
+              <div><input type="radio" class="fc-check" name="objetivo" id="obj4" value="dashboard"><label for="obj4">Crear dashboards ejecutivos</label></div>
+              <div><input type="radio" class="fc-check" name="objetivo" id="obj5" value="certificacion"><label for="obj5">Obtener una certificación Microsoft</label></div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="button" onclick="goStep(2)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+        </div>
+      </fieldset>
+
+      <!-- STEP 2 -->
+      <fieldset class="step-section hidden" id="step-2">
+        <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+          <legend class="text-base font-semibold text-fc-dark mb-1 block">Tu nivel actual en Excel</legend>
+          <p class="text-sm text-fc-muted mb-5">Te recomendamos el módulo de entrada correcto.</p>
+          <div class="space-y-2 mb-4">
+            <div><input type="radio" class="fc-check" name="nivel" id="niv1" value="basico"><label for="niv1"><div><div class="font-medium">Básico — Copio, pego y sumo a mano</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 1 (36h)</div></div></label></div>
+            <div><input type="radio" class="fc-check" name="nivel" id="niv2" value="intermedio"><label for="niv2"><div><div class="font-medium">Intermedio — Conozco fórmulas y tablas básicas</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 2 (50h)</div></div></label></div>
+            <div><input type="radio" class="fc-check" name="nivel" id="niv3" value="avanzado"><label for="niv3"><div><div class="font-medium">Avanzado — Uso tablas dinámicas y XLOOKUP</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 3 (50h)</div></div></label></div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-fc-dark mb-2" for="horas-semana">¿Cuántas horas pierdes a la semana en tareas manuales de Excel?</label>
+            <select id="horas-semana" name="horas_manuales" class="fc-input">
+              <option value="">Selecciona</option>
+              <option>Menos de 1 hora</option>
+              <option>1–3 horas</option>
+              <option>3–6 horas</option>
+              <option>Más de 6 horas</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-between">
+          <button type="button" onclick="goStep(1)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+          <button type="button" onclick="goStep(3)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+        </div>
+      </fieldset>
+
+      <!-- STEP 3 -->
+      <fieldset class="step-section hidden" id="step-3">
+        <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+          <legend class="text-base font-semibold text-fc-dark mb-1 block">Modalidad y horario preferido</legend>
+          <p class="text-sm text-fc-muted mb-5">Ofrecemos 5 opciones de horario.</p>
+          <div class="mb-5">
+            <p class="text-sm font-medium text-fc-dark mb-2">¿Qué modalidad prefieres?</p>
+            <div class="grid sm:grid-cols-3 gap-2">
+              <div><input type="radio" class="fc-check" name="modalidad" id="mod1" value="presencial"><label for="mod1" class="justify-center text-center text-sm">Presencial<br><span class="text-xs text-fc-muted font-normal">Pasto</span></label></div>
+              <div><input type="radio" class="fc-check" name="modalidad" id="mod2" value="virtual"><label for="mod2" class="justify-center text-center text-sm">Virtual<br><span class="text-xs text-fc-muted font-normal">En vivo</span></label></div>
+              <div><input type="radio" class="fc-check" name="modalidad" id="mod3" value="hibrido"><label for="mod3" class="justify-center text-center text-sm">Híbrido<br><span class="text-xs text-fc-muted font-normal">Ambas</span></label></div>
+            </div>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-fc-dark mb-2">¿Qué horario te funciona mejor?</p>
+            <div class="space-y-2">
+              <div><input type="radio" class="fc-check" name="horario" id="h1" value="lm-am"><label for="h1">Lun – Mié · 8:00–11:00 am (Presencial)</label></div>
+              <div><input type="radio" class="fc-check" name="horario" id="h2" value="lm-pm"><label for="h2">Lun – Mié · 6:00–9:00 pm (Virtual)</label></div>
+              <div><input type="radio" class="fc-check" name="horario" id="h3" value="mj-pm"><label for="h3">Mar – Jue · 6:00–9:00 pm (Virtual)</label></div>
+              <div><input type="radio" class="fc-check" name="horario" id="h4" value="vie"><label for="h4">Viernes · 4:00–8:00 pm (Presencial)</label></div>
+              <div><input type="radio" class="fc-check" name="horario" id="h5" value="sab">
+                <label for="h5"><div class="flex items-center gap-2"><span class="font-semibold">Sábado · 8:00 am–2:00 pm (Híbrido)</span><span class="bg-fc-terra text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Nuevo ★</span></div></label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-between">
+          <button type="button" onclick="goStep(2)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+          <button type="button" onclick="goStep(4)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+        </div>
+      </fieldset>
+
+      <!-- STEP 4 -->
+      <fieldset class="step-section hidden" id="step-4">
+        <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+          <legend class="text-base font-semibold text-fc-dark mb-1 block">Sobre la inversión</legend>
+          <p class="text-sm text-fc-muted mb-5">Nos ayuda a ofrecerte opciones de pago adecuadas.</p>
+          <div class="mb-5">
+            <p class="text-sm font-medium text-fc-dark mb-2">¿Cuánto estarías dispuesto a invertir por módulo?</p>
+            <div class="space-y-2">
+              <div><input type="radio" class="fc-check" name="precio" id="p1" value="menos100k"><label for="p1">Menos de $100.000 COP</label></div>
+              <div><input type="radio" class="fc-check" name="precio" id="p2" value="100-200k"><label for="p2">Entre $100.000 y $200.000 COP</label></div>
+              <div><input type="radio" class="fc-check" name="precio" id="p3" value="200-350k"><label for="p3">Entre $200.000 y $350.000 COP</label></div>
+              <div><input type="radio" class="fc-check" name="precio" id="p4" value="mas350k"><label for="p4">Más de $350.000 COP si la calidad lo justifica</label></div>
+            </div>
+          </div>
+          <div>
+            <label for="sugerencia" class="block text-sm font-medium text-fc-dark mb-2">¿Alguna sugerencia o tema que te gustaría que incluyéramos?</label>
+            <textarea id="sugerencia" name="sugerencia" rows="3" class="fc-input resize-none" placeholder="Escribe tus sugerencias o preguntas…"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-between">
+          <button type="button" onclick="goStep(3)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+          <button type="button" onclick="goStep(5)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+        </div>
+      </fieldset>
+
+      <!-- STEP 5 -->
+      <fieldset class="step-section hidden" id="step-5">
+        <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+          <legend class="text-base font-semibold text-fc-dark mb-1 block">Tus datos de contacto</legend>
+          <p class="text-sm text-fc-muted mb-5">Te enviamos la recomendación personalizada y detalles del programa.</p>
+          <div class="grid sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label for="nombre" class="block text-sm font-medium text-fc-dark mb-1.5">Nombre completo <span class="text-red-500">*</span></label>
+              <input type="text" id="nombre" name="nombre" class="fc-input" placeholder="Tu nombre" required>
+            </div>
+            <div>
+              <label for="empresa" class="block text-sm font-medium text-fc-dark mb-1.5">Empresa u organización</label>
+              <input type="text" id="empresa" name="empresa" class="fc-input" placeholder="Opcional">
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label for="telefono" class="block text-sm font-medium text-fc-dark mb-1.5">WhatsApp <span class="text-red-500">*</span></label>
+              <input type="tel" id="telefono" name="telefono" class="fc-input" placeholder="+57 300 000 0000" required>
+            </div>
+            <div>
+              <label for="email" class="block text-sm font-medium text-fc-dark mb-1.5">Correo electrónico <span class="text-red-500">*</span></label>
+              <input type="email" id="email" name="email" class="fc-input" placeholder="tu@correo.com" required>
+            </div>
+          </div>
+          <div class="mt-4 p-3 bg-fc-cream rounded-lg text-xs text-fc-muted">
+            <strong class="text-fc-dark">Privacidad:</strong> Tus datos solo se usan para enviarte información del programa. Nunca se comparten con terceros.
+          </div>
+        </div>
+        <div class="flex justify-between">
+          <button type="button" onclick="goStep(4)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+          <button type="submit" id="btn-enviar"
+            class="bg-fc-green text-white font-semibold text-sm px-8 py-2.5 rounded-md hover:bg-fc-green2 transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+            <span id="btn-enviar-txt">Enviar encuesta</span>
+          </button>
+        </div>
+      </fieldset>
+
+      <!-- SUCCESS -->
+      <div class="hidden text-center py-10" id="step-success" role="status" aria-live="polite">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+          <svg class="w-8 h-8 text-fc-green" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h2 class="font-display text-2xl font-bold text-fc-dark mb-2">¡Gracias por responder!</h2>
+        <p class="text-fc-muted text-sm mb-2 max-w-sm mx-auto">Tus respuestas quedaron guardadas. En menos de 24 horas te enviamos la recomendación personalizada y los detalles del módulo ideal para ti.</p>
+        <p id="firebase-id" class="text-xs text-fc-muted/60 mb-6"></p>
+        <a href="fc-landing-curso-excel.html" class="inline-block bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">
+          Ver el programa completo →
+        </a>
+      </div>
+
+    </form>
+  </div>
+</main>
+
+<footer class="bg-fc-dark text-white mt-12">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between text-xs text-gray-500">
+    <span>© 2025 FC Consultores y Asesores Financieros</span>
+    <span>300 558 0358 · campo.fabian1@gmail.com</span>
+  </div>
+</footer>
+
+<script>
+const TOTAL = 5;
+let cur = 1;
+const answers = {};
+
+function goStep(n) {
+  document.getElementById(`step-${cur}`).classList.add('hidden');
+  cur = n;
+
+  if (n > TOTAL) {
+    // Recolectar datos de pasos 1-4
+    const f = document.getElementById('survey-form');
+    ['profesion','nivel','horas_manuales','modalidad','horario','precio','sugerencia'].forEach(k => {
+      const el = f.elements[k];
+      if (!el) return;
+      if (el.type === 'radio' || el.type === 'checkbox') {
+        const checked = f.querySelectorAll(`[name="${k}"]:checked`);
+        if (checked.length) answers[k] = checked[0].value;
+      } else {
+        if (el.value) answers[k] = el.value;
+      }
+    });
+    submitForm();
+    return;
+  }
+
+  document.getElementById(`step-${n}`).classList.remove('hidden');
+  const pct = Math.round((n/TOTAL)*100);
+  document.getElementById('progress-bar').style.width = pct+'%';
+  document.getElementById('step-label').textContent = `Paso ${n} de ${TOTAL}`;
+
+  for (let i=1;i<=TOTAL;i++) {
+    const dot = document.querySelector(`#si-${i} .step-dot`);
+    const lbl = document.querySelector(`#si-${i} span`);
+    if (!dot) continue;
+    dot.classList.remove('active','done');
+    if (i<n)      { dot.classList.add('done'); lbl.className='text-sm text-fc-dark font-medium'; }
+    else if (i===n){ dot.classList.add('active'); lbl.className='text-sm text-fc-dark font-medium'; }
+    else           { lbl.className='text-sm text-fc-muted'; }
+  }
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+async function submitForm() {
+  const nombre   = document.getElementById('nombre').value.trim();
+  const telefono = document.getElementById('telefono').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const empresa  = document.getElementById('empresa').value.trim();
+
+  if (!nombre || !telefono || !email) {
+    alert('Por favor completa los campos obligatorios (nombre, WhatsApp y correo).');
+    goStep(5); return;
+  }
+
+  // Loading
+  const btn = document.getElementById('btn-enviar');
+  document.getElementById('btn-enviar-txt').textContent = 'Guardando…';
+  btn.disabled = true;
+
+  const payload = { ...answers, nombre, telefono, email };
+  if (empresa) payload.empresa = empresa;
+
+  const res = await window.guardarEncuesta?.(payload) ?? { ok: false, err: 'Firebase no cargado aún' };
+
+  if (res.ok) {
+    document.getElementById('step-success').classList.remove('hidden');
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('step-label').textContent = '¡Completado!';
+    if (res.id) document.getElementById('firebase-id').textContent = `Referencia: ${res.id}`;
+    window.scrollTo({ top:0, behavior:'smooth' });
+  } else {
+    document.getElementById('btn-enviar-txt').textContent = 'Enviar encuesta';
+    btn.disabled = false;
+    alert('Error al guardar. Por favor intenta de nuevo o escríbenos al WhatsApp 300 558 0358.\n\nDetalle: ' + res.err);
+  }
+}
+
+document.getElementById('survey-form').addEventListener('submit', e => {
+  e.preventDefault();
+  goStep(6);
+});
+
+// Scroll reveal
+const obs = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+}),{ threshold:0.1 });
+document.querySelectorAll('.reveal').forEach(e => obs.observe(e));
+</script>
+</body>
+</html>
