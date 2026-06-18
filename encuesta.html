@@ -27,6 +27,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
+window.FC_DB = db;
 let analytics;
 try { analytics = getAnalytics(app); } catch(e) {}
 
@@ -74,6 +75,26 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F8F7F4;color:#1A1A1A}
 .fc-input:focus{outline:none;border-color:#1F5C2E} .fc-input::placeholder{color:#9a9a9a}
 #progress-bar{transition:width .4s ease-out}
 @media(prefers-reduced-motion:reduce){.reveal,.fc-check+label,.step-dot,#progress-bar{transition:none}}
+
+/* ══ ADMIN PANEL ══ */
+#admin-fab{position:fixed;bottom:24px;left:24px;z-index:8888;width:42px;height:42px;border-radius:50%;background:#1A1A1A;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .2s,box-shadow .2s;font-size:16px}
+#admin-fab:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8889;opacity:0;pointer-events:none;transition:opacity .25s}
+#admin-overlay.open{opacity:1;pointer-events:all}
+#admin-drawer{position:fixed;top:0;right:-100%;width:min(780px,100vw);height:100vh;background:#f9fafb;z-index:8890;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 32px rgba(0,0,0,.15)}
+#admin-drawer.open{right:0}
+#admin-login{position:fixed;inset:0;z-index:8891;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+#admin-login.show{display:flex}
+.adm-tab{padding:8px 18px;font-size:13px;font-weight:500;border-radius:8px;transition:background .15s,color .15s;color:#6b7280;border:none;background:transparent;cursor:pointer}
+.adm-tab.active{background:#1F5C2E;color:#fff}
+.adm-sec{display:none}.adm-sec.active{display:block}
+.adm-stat{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:16px 20px}
+.adm-table{width:100%;border-collapse:collapse;font-size:13px}
+.adm-table th{background:#f3f4f6;padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7280}
+.adm-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#374151}
+.adm-table tr:hover td{background:#f9fafb}
+.adm-badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px}
+
 </style>
 </head>
 <body class="min-h-screen">
@@ -415,6 +436,160 @@ const obs = new IntersectionObserver(es => es.forEach(e => {
   if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
 }),{ threshold:0.1 });
 document.querySelectorAll('.reveal').forEach(e => obs.observe(e));
+
+// ══ ADMIN PANEL LOGIC ══
+const ADM_PASS = 'FC2025admin';
+
+function adminOpen() {
+  if (sessionStorage.getItem('fc_admin') === ADM_PASS) {
+    openDrawer();
+  } else {
+    document.getElementById('admin-login').classList.add('show');
+    setTimeout(() => document.getElementById('admin-pass').focus(), 100);
+  }
+}
+
+function adminLogin() {
+  const p = document.getElementById('admin-pass').value;
+  if (p === ADM_PASS) {
+    sessionStorage.setItem('fc_admin', ADM_PASS);
+    document.getElementById('admin-login').classList.remove('show');
+    document.getElementById('admin-pass').value = '';
+    document.getElementById('admin-err').style.display = 'none';
+    openDrawer();
+  } else {
+    document.getElementById('admin-err').style.display = 'block';
+    document.getElementById('admin-pass').select();
+  }
+}
+
+function openDrawer() {
+  document.getElementById('admin-drawer').classList.add('open');
+  document.getElementById('admin-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  admLoadAll();
+}
+
+function adminClose() {
+  document.getElementById('admin-drawer').classList.remove('open');
+  document.getElementById('admin-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function admTab(name, btn) {
+  document.querySelectorAll('.adm-sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.adm-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('adm-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function admTimeAgo(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+  const diff = Math.floor((Date.now() - d) / 1000);
+  if (diff < 60)    return 'Hace un momento';
+  if (diff < 3600)  return `Hace ${Math.floor(diff/60)} min`;
+  if (diff < 86400) return `Hace ${Math.floor(diff/3600)} h`;
+  return d.toLocaleDateString('es-CO', {day:'2-digit',month:'short',year:'numeric'});
+}
+
+function admBadge(val, color) {
+  const colors = {
+    green:  'background:#dcfce7;color:#166534',
+    orange: 'background:#ffedd5;color:#9a3412',
+    blue:   'background:#dbeafe;color:#1e40af',
+    gray:   'background:#f3f4f6;color:#4b5563',
+  };
+  return `<span class="adm-badge" style="${colors[color]||colors.gray}">${val||'—'}</span>`;
+}
+
+async function admLoadAll() {
+  if (!window.FC_DB) return;
+  const { getDocs, collection, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
+
+  // Inscripciones
+  const insSnap = await getDocs(query(collection(window.FC_DB,'inscripciones'), orderBy('timestamp','desc'), limit(200)));
+  const insRows = []; insSnap.forEach(d => insRows.push({id:d.id,...d.data()}));
+  document.getElementById('adm-cnt-ins').textContent = insRows.length;
+  document.getElementById('adm-loading-ins').style.display = 'none';
+  document.getElementById('adm-tbody-ins').innerHTML = insRows.length
+    ? insRows.map(r => `<tr>
+        <td style="font-weight:500">${r.nombre||'—'}</td>
+        <td>${r.email||'—'}</td>
+        <td>${r.telefono||'—'}</td>
+        <td>${admBadge(r.modulo, r.modulo==='basico'?'green':r.modulo==='intermedio'?'orange':r.modulo==='avanzado'?'blue':'gray')}</td>
+        <td style="color:#9ca3af;font-size:12px">${admTimeAgo(r.timestamp)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">Sin registros aún</td></tr>';
+
+  // Encuestas
+  const encSnap = await getDocs(query(collection(window.FC_DB,'encuestas'), orderBy('timestamp','desc'), limit(200)));
+  const encRows = []; encSnap.forEach(d => encRows.push({id:d.id,...d.data()}));
+  document.getElementById('adm-cnt-enc').textContent = encRows.length;
+  document.getElementById('adm-loading-enc').style.display = 'none';
+
+  const niveles={}, horarios={}, precios={};
+  encRows.forEach(r => {
+    if(r.nivel)   niveles[r.nivel]   = (niveles[r.nivel]||0)+1;
+    if(r.horario) horarios[r.horario]= (horarios[r.horario]||0)+1;
+    if(r.precio)  precios[r.precio]  = (precios[r.precio]||0)+1;
+  });
+  const top = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1])[0];
+  const tn = top(niveles), th = top(horarios), tp = top(precios);
+  document.getElementById('adm-stat-nivel').textContent   = tn ? `${tn[0]} (${tn[1]})` : '—';
+  document.getElementById('adm-stat-horario').textContent = th ? `${th[0]} (${th[1]})` : '—';
+  document.getElementById('adm-stat-precio').textContent  = tp ? `${tp[0]} (${tp[1]})` : '—';
+
+  document.getElementById('adm-tbody-enc').innerHTML = encRows.length
+    ? encRows.map(r => `<tr>
+        <td style="font-weight:500">${r.nombre||'—'}</td>
+        <td>${r.email||'—'}</td>
+        <td>${r.telefono||'—'}</td>
+        <td>${admBadge(r.nivel, r.nivel==='basico'?'green':r.nivel==='intermedio'?'orange':'blue')}</td>
+        <td style="font-size:12px">${r.horario||'—'}</td>
+        <td style="font-size:12px">${r.precio||'—'}</td>
+        <td style="color:#9ca3af;font-size:12px">${admTimeAgo(r.timestamp)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af">Sin encuestas aún</td></tr>';
+
+  // Interacciones
+  const intSnap = await getDocs(query(collection(window.FC_DB,'interacciones'), orderBy('timestamp','desc'), limit(100)));
+  const clics = {}; let totalInt = 0;
+  intSnap.forEach(d => { const r=d.data(); const k=`${r.modulo}/${r.sesion}`; clics[k]=(clics[k]||0)+1; totalInt++; });
+  document.getElementById('adm-cnt-int').textContent = totalInt;
+  const sorted = Object.entries(clics).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('adm-clics-list').innerHTML = sorted.length
+    ? sorted.map(([k,v]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6">
+          <span style="font-size:13px;color:#374151">${k}</span>
+          <span style="font-size:11px;font-weight:700;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:100px">${v}</span>
+        </div>`).join('')
+    : '<p style="color:#9ca3af;font-size:13px">Sin clics registrados aún</p>';
+
+  document.getElementById('adm-last-update').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CO');
+}
+
+async function admExport(col) {
+  if (!window.FC_DB) { alert('Firebase no disponible'); return; }
+  const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
+  const snap = await getDocs(collection(window.FC_DB, col));
+  const rows = []; snap.forEach(d => rows.push(d.data()));
+  if (!rows.length) { alert('Sin datos para exportar'); return; }
+  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k=>k!=='timestamp');
+  const header = [...keys,'fecha'].join(',');
+  const lines = rows.map(r => {
+    const fecha = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-CO') : '';
+    return [...keys.map(k=>`"${(r[k]||'').toString().replace(/"/g,'""')}"`), `"${fecha}"`].join(',');
+  });
+  const blob = new Blob(['﻿'+[header,...lines].join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`fc-${col}-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Cerrar con ESC
+document.addEventListener('keydown', e => { if(e.key==='Escape') adminClose(); });
+
 </script>
 </body>
 </html>
