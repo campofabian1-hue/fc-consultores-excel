@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FC Consultores — Excel para Financieros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- ══ FIREBASE (módulo único compartido) ══ -->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit }
+                               from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+import { getAnalytics, logEvent } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-analytics.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCfIeVBVkuVLRmNOFzm_yDpUb-6K7VP6bg",
+  authDomain:        "fc-consultores-excel.firebaseapp.com",
+  projectId:         "fc-consultores-excel",
+  storageBucket:     "fc-consultores-excel.firebasestorage.app",
+  messagingSenderId: "1006107014654",
+  appId:             "1:1006107014654:web:f7ddb40ed7bd9ebab93caf",
+  measurementId:     "G-G5Y6JJNNRK"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+let analytics;
+try { analytics = getAnalytics(app); } catch(e) {}
+window.FC_DB = db;
+
+window.FC = {
+  async guardarInscripcion(data) {
+    try {
+      const docRef = await addDoc(collection(db, 'inscripciones'), {
+        ...data, timestamp: serverTimestamp(), fuente: 'landing-unificado',
+        url: window.location.href, userAgent: navigator.userAgent.substring(0,120),
+      });
+      if (analytics) logEvent(analytics, 'sign_up', { method: 'landing_form' });
+      return { ok: true, id: docRef.id };
+    } catch (err) { console.error(err); return { ok: false, err: err.message }; }
+  },
+  async guardarEncuesta(data) {
+    try {
+      const docRef = await addDoc(collection(db, 'encuestas'), {
+        ...data, timestamp: serverTimestamp(), fuente: 'pagina-unificada', url: window.location.href,
+      });
+      if (analytics) logEvent(analytics, 'generate_lead', { source: 'encuesta' });
+      return { ok: true, id: docRef.id };
+    } catch (err) { console.error(err); return { ok: false, err: err.message }; }
+  },
+  async registrarClic(modulo, sesion) {
+    try {
+      await addDoc(collection(db, 'interacciones'), { tipo:'clic_card', modulo, sesion, timestamp: serverTimestamp() });
+      if (analytics) logEvent(analytics, 'select_content', { content_type:'course_card', item_id: sesion });
+    } catch {}
+  }
+};
+
+// Exponer helpers Firestore para el panel admin
+window.FC_firestore = { collection, getDocs, query, orderBy, limit };
+</script>
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        fc: {
+          green:'#1F5C2E', green2:'#2D7A3E', green3:'#3D9B52',
+          terra:'#C2461A', terra2:'#D95A28',
+          cream:'#F8F7F4', dark:'#1A1A1A', mid:'#4A4A4A',
+          muted:'#7A7A7A', border:'#E2E2DC',
+        }
+      },
+      fontFamily: {
+        display:['"Playfair Display"','Georgia','serif'],
+        body:['Inter','system-ui','sans-serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:#F8F7F4;color:#1A1A1A}
+.skip-link{position:absolute;left:-9999px;top:auto}
+.skip-link:focus{left:16px;top:16px;z-index:9999;background:#1F5C2E;color:#fff;padding:8px 16px;border-radius:4px}
+.dot-grid{background-image:radial-gradient(circle,rgba(255,255,255,.18) 1px,transparent 1px);background-size:24px 24px}
+.course-card{transition:transform 220ms ease-out,box-shadow 220ms ease-out;will-change:transform}
+.course-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,.12)}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .55s ease-out,transform .55s ease-out}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.dot-nav button{width:10px;height:10px;border-radius:50%;background:#ccc;transition:background .2s,transform .2s}
+.dot-nav button.active{background:#1F5C2E;transform:scale(1.3)}
+*:focus-visible{outline:3px solid #3D9B52;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.course-card,.reveal{transition:none}.course-card:hover{transform:none}}
+
+.fc-input{width:100%;border:1.5px solid #E2E2DC;border-radius:8px;padding:10px 14px;font-size:14px;background:#fff;color:#1A1A1A;transition:border-color .18s}
+.fc-input:focus{outline:none;border-color:#1F5C2E}
+.fc-input::placeholder{color:#9a9a9a}
+.fc-input.error{border-color:#dc2626}
+
+.fc-check{display:none}
+.fc-check+label{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid #E2E2DC;border-radius:10px;cursor:pointer;transition:border-color .18s,background .18s;font-size:14px;color:#1A1A1A}
+.fc-check+label::before{content:'';flex-shrink:0;width:18px;height:18px;border-radius:4px;border:2px solid #d0d0ca;background:#fff;margin-top:1px;transition:border-color .18s,background .18s}
+.fc-check[type=radio]+label::before{border-radius:50%}
+.fc-check:checked+label{border-color:#1F5C2E;background:#f0f7f2}
+.fc-check:checked+label::before{background:#1F5C2E;border-color:#1F5C2E;background-image:url("data:image/svg+xml,%3Csvg width='10' height='8' viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l3 3 5-6' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+.fc-check:focus-visible+label{outline:3px solid #3D9B52;outline-offset:2px}
+
+.step-dot{width:8px;height:8px;border-radius:50%;background:#d0d0ca;transition:background .2s,transform .2s}
+.step-dot.done{background:#1F5C2E} .step-dot.active{background:#1F5C2E;transform:scale(1.4)}
+#progress-bar{transition:width .4s ease-out}
+
+#toast{position:fixed;bottom:24px;right:24px;z-index:9999;transform:translateY(80px);opacity:0;transition:transform .3s ease,opacity .3s ease;pointer-events:none}
+#toast.show{transform:translateY(0);opacity:1}
+
+/* ══ VIEW SWITCHER ══ */
+.fc-view{display:none}
+.fc-view.active{display:block;animation:viewFade .35s ease-out}
+@keyframes viewFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══ MAIN NAV (pills) ══ */
+.nav-pill{padding:7px 16px;border-radius:100px;font-size:13px;font-weight:600;transition:background .18s,color .18s;cursor:pointer;border:none;white-space:nowrap}
+.nav-pill.active{background:#1F5C2E;color:#fff}
+.nav-pill:not(.active){background:transparent;color:#4A4A4A}
+.nav-pill:not(.active):hover{background:#F0F0EC}
+
+/* ══ ADMIN PANEL ══ */
+#admin-fab{position:fixed;bottom:24px;left:24px;z-index:8888;width:42px;height:42px;border-radius:50%;background:#1A1A1A;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .2s,box-shadow .2s;font-size:16px}
+#admin-fab:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8889;opacity:0;pointer-events:none;transition:opacity .25s}
+#admin-overlay.open{opacity:1;pointer-events:all}
+#admin-drawer{position:fixed;top:0;right:-100%;width:min(780px,100vw);height:100vh;background:#f9fafb;z-index:8890;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 32px rgba(0,0,0,.15)}
+#admin-drawer.open{right:0}
+#admin-login{position:fixed;inset:0;z-index:8891;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+#admin-login.show{display:flex}
+.adm-tab{padding:8px 18px;font-size:13px;font-weight:500;border-radius:8px;transition:background .15s,color .15s;color:#6b7280;border:none;background:transparent;cursor:pointer}
+.adm-tab.active{background:#1F5C2E;color:#fff}
+.adm-sec{display:none}.adm-sec.active{display:block}
+.adm-stat{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:16px 20px}
+.adm-table{width:100%;border-collapse:collapse;font-size:13px}
+.adm-table th{background:#f3f4f6;padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7280}
+.adm-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#374151}
+.adm-table tr:hover td{background:#f9fafb}
+.adm-badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px}
+</style>
+</head>
+<body class="min-h-screen">
+<a href="#main" class="skip-link">Saltar al contenido principal</a>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- ══ NAVBAR PRINCIPAL (fijo, con switcher de vistas) ══ -->
+<header class="sticky top-0 z-40 bg-white border-b border-fc-border shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+    <button onclick="fcGoView('landing')" class="flex items-center gap-2 flex-shrink-0" aria-label="FC Consultores inicio">
+      <span class="w-8 h-8 rounded-md bg-fc-green flex items-center justify-center text-white font-bold text-sm" aria-hidden="true">FC</span>
+      <span class="font-semibold text-fc-dark text-sm sm:text-base hidden sm:inline">FC Consultores</span>
+    </button>
+
+    <!-- Switcher central de vistas -->
+    <nav class="flex items-center gap-1 bg-fc-cream rounded-full p-1" aria-label="Navegación de secciones" id="main-nav-pills">
+      <button class="nav-pill active" data-view="landing" onclick="fcGoView('landing')">Programa</button>
+      <button class="nav-pill" data-view="encuesta" onclick="fcGoView('encuesta')">Encuesta</button>
+    </nav>
+
+    <button onclick="fcGoView('landing'); setTimeout(()=>document.getElementById('inscripcion').scrollIntoView({behavior:'smooth'}),100)"
+      class="flex-shrink-0 bg-fc-green hover:bg-fc-green2 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors">
+      Inscribirse
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ══════════════════════════════════════════════════════
+       VISTA: LANDING
+  ══════════════════════════════════════════════════════ -->
+  <div class="fc-view active" id="view-landing">
+
+    <!-- Breadcrumb -->
+    <div class="bg-fc-green">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 h-8 flex items-center">
+        <ol class="flex items-center gap-1.5 text-xs text-green-200">
+          <li><span>Inicio</span></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-white font-medium">Programa Excel</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <section class="bg-fc-green dot-grid relative overflow-hidden" aria-labelledby="hero-heading">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 md:py-16 grid md:grid-cols-2 gap-8 items-center min-h-[320px]">
+        <div class="relative z-10">
+          <p class="text-green-300 text-xs font-semibold uppercase tracking-widest mb-3">FC Consultores · Formación 2025</p>
+          <h1 id="hero-heading" class="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4">
+            Excel que habla<br>el idioma de las<br><em class="not-italic text-fc-terra2">finanzas.</em>
+          </h1>
+          <p class="text-green-100 text-base sm:text-lg leading-relaxed mb-6 max-w-md">
+            Donde administradores y contadores dominan la herramienta más poderosa del análisis financiero.
+          </p>
+          <div class="flex flex-wrap gap-6 mb-8">
+            <div class="text-center"><div class="text-2xl font-bold text-white">136h</div><div class="text-xs text-green-300">Totales</div></div>
+            <div class="text-center"><div class="text-2xl font-bold text-white">3</div><div class="text-xs text-green-300">Módulos</div></div>
+            <div class="text-center"><div class="text-2xl font-bold text-white">18</div><div class="text-xs text-green-300">Máx. grupo</div></div>
+            <div class="text-center"><div class="text-2xl font-bold text-white">5.0★</div><div class="text-xs text-green-300">Valoración</div></div>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <a href="#inscripcion" class="inline-flex items-center gap-2 bg-white text-fc-green font-semibold text-sm px-5 py-2.5 rounded-md hover:bg-green-50 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Inscribirme ahora
+            </a>
+            <button onclick="fcGoView('encuesta')" class="inline-flex items-center gap-2 border border-white/40 text-white text-sm px-5 py-2.5 rounded-md hover:bg-white/10 transition-colors">
+              Hacer la encuesta →
+            </button>
+          </div>
+        </div>
+        <div class="hidden md:flex justify-end relative z-10">
+          <div class="relative w-80 h-72">
+            <div class="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl">
+              <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=640&q=85&fit=crop&crop=faces,top"
+                alt="Profesional colombiana trabajando con Excel en laptop"
+                class="w-full h-full object-cover object-top" loading="eager" width="640" height="480">
+              <div class="absolute inset-0 bg-gradient-to-t from-fc-green/40 via-transparent to-transparent"></div>
+            </div>
+            <div class="absolute -top-3 -right-4 bg-white rounded-xl shadow-lg px-3 py-2 text-xs font-medium text-fc-dark border border-fc-border flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-fc-green" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              4h → 8 min
+            </div>
+            <div class="absolute -bottom-3 -left-4 bg-fc-terra text-white rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-lg">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+              Certificado incluido
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-center gap-2 pb-4 dot-nav">
+        <button class="active" aria-label="Slide 1"></button>
+        <button aria-label="Slide 2"></button>
+      </div>
+    </section>
+
+    <!-- TWO-COLUMN -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-10">
+
+        <section id="modulos" aria-labelledby="mod-heading">
+          <div class="flex items-center justify-between mb-4">
+            <h2 id="mod-heading" class="text-lg font-semibold text-fc-dark">Catálogo de Módulos</h2>
+          </div>
+
+          <!-- Básico -->
+          <div class="mb-8 reveal">
+            <div class="mb-3">
+              <p class="text-base font-semibold text-fc-green">Módulo 1 — Básico <span class="text-fc-muted font-normal text-sm">· 36 horas · 8 sesiones</span></p>
+              <p class="text-sm text-fc-muted">Fórmulas esenciales, tablas y primer dashboard</p>
+            </div>
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('basico','entorno-productividad')" aria-label="Sesión 1: Entorno y productividad">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1587560699334-cc4ff634909a?w=480&q=80&fit=crop" alt="Manos en teclado con Excel" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/50"></div>
+                  <span class="absolute top-2 right-2 bg-fc-terra2 text-white text-[10px] font-bold px-2 py-0.5 rounded">Nuevo</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Entorno y productividad en Excel</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">Interfaz, atajos, referencias absolutas</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 4h 30m</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('basico','funciones-matematicas')" aria-label="Sesión 2: Funciones matemáticas">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1543286386-713bdd548da4?w=480&q=80&fit=crop" alt="Datos financieros en pantalla" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/55"></div>
+                  <span class="absolute top-2 right-2 bg-fc-terra2 text-white text-[10px] font-bold px-2 py-0.5 rounded">Nuevo</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Funciones matemáticas y estadísticas</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">SUMA, PROMEDIO, CONTAR, REDONDEAR</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 4h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('basico','texto-fecha')" aria-label="Sesión 3: Funciones de texto y fecha">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=480&q=80&fit=crop" alt="Planificación con calendario" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/55"></div>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Funciones de texto y fecha</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">CONCATENAR, SIFECHA, DIASLABORALES</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 4h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Intermedio -->
+          <div class="mb-8 reveal" data-delay="80">
+            <div class="mb-3">
+              <p class="text-base font-semibold text-fc-green">Módulo 2 — Intermedio <span class="text-fc-muted font-normal text-sm">· 50 horas · 7 sesiones</span></p>
+              <p class="text-sm text-fc-muted">XLOOKUP, VPN/TIR, Arrays dinámicos, Tablas dinámicas pro</p>
+            </div>
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('intermedio','xlookup')" aria-label="XLOOKUP">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=480&q=80&fit=crop" alt="Análisis de datos financieros" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0" style="background:rgba(194,70,26,0.65)"></div>
+                  <span class="absolute top-2 right-2 bg-fc-green text-white text-[10px] font-bold px-2 py-0.5 rounded">Popular</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Búsquedas avanzadas: XLOOKUP</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">XLOOKUP, ÍNDICE/COINCIDIR bidireccional</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 8h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('intermedio','financieras')" aria-label="Funciones financieras">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=480&q=80&fit=crop" alt="Gráficos de inversión" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0" style="background:rgba(194,70,26,0.65)"></div>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Funciones financieras VPN · TIR</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">PAGO, TASA, tabla de amortización</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 8h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('intermedio','dashboard')" aria-label="Dashboard ejecutivo">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=480&q=80&fit=crop" alt="Dashboard ejecutivo" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0" style="background:rgba(194,70,26,0.65)"></div>
+                  <span class="absolute top-2 right-2 bg-fc-terra2 text-white text-[10px] font-bold px-2 py-0.5 rounded">Nuevo</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Dashboard ejecutivo interactivo</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">Segmentadores, gráfico waterfall</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 8h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Avanzado -->
+          <div class="reveal" data-delay="160">
+            <div class="mb-3">
+              <p class="text-base font-semibold text-fc-green">Módulo 3 — Avanzado <span class="text-fc-muted font-normal text-sm">· 50 horas · 9 sesiones</span></p>
+              <p class="text-sm text-fc-muted">Power Query, Power Pivot + DAX, VBA, Solver, Power BI</p>
+            </div>
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('avanzado','power-query')" aria-label="Power Query">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?w=480&q=80&fit=crop" alt="Automatización de datos" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/60"></div>
+                  <span class="absolute top-2 right-2 bg-fc-terra2 text-white text-[10px] font-bold px-2 py-0.5 rounded">Nuevo</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Power Query — ETL automatizado</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">Conectar, limpiar, consolidar sin código</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 10h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('avanzado','macros-vba')" aria-label="Macros VBA">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1484417894907-623942c8ee29?w=480&q=80&fit=crop&crop=center" alt="Código de automatización" class="w-full h-full object-cover object-top" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/60"></div>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Macros VBA — Automatización</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">Sub, bucles, formularios, envío PDF</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 12h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+              <article class="course-card bg-white rounded-xl border border-fc-border overflow-hidden cursor-pointer" onclick="window.FC?.registrarClic('avanzado','proyecto-final')" aria-label="Proyecto integrador final">
+                <div class="relative h-36 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=480&q=80&fit=crop" alt="Presentación ejecutiva" class="w-full h-full object-cover" loading="lazy" width="480" height="144">
+                  <div class="absolute inset-0 bg-fc-green/55"></div>
+                  <span class="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded">Final</span>
+                </div>
+                <div class="p-3">
+                  <h3 class="text-sm font-semibold text-fc-dark leading-snug mb-1">Proyecto integrador final</h3>
+                  <p class="text-[11px] text-fc-muted mb-2">Power Query + DAX + VBA + Dashboard</p>
+                  <div class="flex items-center justify-between text-[11px] text-fc-muted"><span class="uppercase tracking-wide text-fc-green font-medium">Disponible</span><span>ES · 8h</span></div>
+                  <div class="flex items-center justify-between mt-1.5 text-[11px] text-fc-muted"><span>★ 5.0</span><span>E-learning</span></div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <!-- HORARIOS -->
+        <section class="reveal" aria-labelledby="hor-heading">
+          <h2 id="hor-heading" class="text-lg font-semibold text-fc-dark mb-4">Horarios disponibles</h2>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="bg-white rounded-xl border border-fc-border p-4 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-fc-green/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-fc-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div><div class="text-sm font-semibold text-fc-dark">Lun – Mié · 8:00–11:00 am</div><div class="text-xs text-fc-muted">Presencial, Pasto</div></div>
+            </div>
+            <div class="bg-white rounded-xl border border-fc-border p-4 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-fc-green/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-fc-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div><div class="text-sm font-semibold text-fc-dark">Lun – Mié · 6:00–9:00 pm</div><div class="text-xs text-fc-muted">Virtual en vivo</div></div>
+            </div>
+            <div class="bg-white rounded-xl border border-fc-border p-4 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-fc-green/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-fc-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div><div class="text-sm font-semibold text-fc-dark">Mar – Jue · 6:00–9:00 pm</div><div class="text-xs text-fc-muted">Virtual en vivo</div></div>
+            </div>
+            <div class="bg-white rounded-xl border-2 border-fc-terra p-4 flex items-center gap-3 relative">
+              <span class="absolute -top-2 left-3 bg-fc-terra text-white text-[10px] font-bold px-2 py-0.5 rounded">Nuevo ★</span>
+              <div class="w-10 h-10 rounded-lg bg-fc-terra/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-fc-terra" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div><div class="text-sm font-semibold text-fc-dark">Sábado · 8:00 am – 2:00 pm</div><div class="text-xs text-fc-muted">Híbrido — Presencial + Virtual</div></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- SIDEBAR -->
+      <aside class="space-y-5" aria-label="Información del programa">
+        <div class="bg-fc-terra rounded-xl p-5 relative overflow-hidden">
+          <div class="absolute inset-0 opacity-20" style="background-image:radial-gradient(circle,rgba(255,255,255,.4) 1px,transparent 1px);background-size:18px 18px;"></div>
+          <div class="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10"></div>
+          <div class="relative z-10">
+            <h3 class="text-white font-bold text-lg mb-1">Comunidad FC</h3>
+            <p class="text-orange-100 text-sm mb-4">Aprende, conecta y crece con otros profesionales de Nariño.</p>
+            <button onclick="fcGoView('encuesta')" class="inline-block bg-fc-dark text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-md hover:bg-fc-mid transition-colors">
+              Unirme →
+            </button>
+          </div>
+        </div>
+
+        <div id="inscripcion" class="bg-white rounded-xl border border-fc-border p-5">
+          <h3 class="text-fc-dark font-bold text-base mb-1">Reserva tu cupo</h3>
+          <p class="text-fc-muted text-xs mb-4">Módulos independientes — empieza en el nivel que ya tienes.</p>
+
+          <form id="form-inscripcion" novalidate>
+            <div class="mb-3">
+              <label for="ins-nombre" class="block text-xs font-medium text-fc-dark mb-1">Nombre completo <span class="text-red-500">*</span></label>
+              <input type="text" id="ins-nombre" name="nombre" class="fc-input" placeholder="Tu nombre" required>
+              <p class="text-[11px] text-red-500 mt-1 hidden" id="err-nombre">Ingresa tu nombre</p>
+            </div>
+            <div class="mb-3">
+              <label for="ins-telefono" class="block text-xs font-medium text-fc-dark mb-1">WhatsApp <span class="text-red-500">*</span></label>
+              <input type="tel" id="ins-telefono" name="telefono" class="fc-input" placeholder="+57 300 000 0000" required>
+              <p class="text-[11px] text-red-500 mt-1 hidden" id="err-telefono">Ingresa tu número</p>
+            </div>
+            <div class="mb-3">
+              <label for="ins-email" class="block text-xs font-medium text-fc-dark mb-1">Correo electrónico <span class="text-red-500">*</span></label>
+              <input type="email" id="ins-email" name="email" class="fc-input" placeholder="tu@correo.com" required>
+              <p class="text-[11px] text-red-500 mt-1 hidden" id="err-email">Ingresa un correo válido</p>
+            </div>
+            <div class="mb-4">
+              <label for="ins-modulo" class="block text-xs font-medium text-fc-dark mb-1">Módulo de interés</label>
+              <select id="ins-modulo" name="modulo" class="fc-input">
+                <option value="">¿Con cuál módulo inicias?</option>
+                <option value="basico">Módulo 1 — Básico (36h)</option>
+                <option value="intermedio">Módulo 2 — Intermedio (50h)</option>
+                <option value="avanzado">Módulo 3 — Avanzado (50h)</option>
+                <option value="completo">Programa completo (136h)</option>
+              </select>
+            </div>
+            <button type="submit" id="btn-inscripcion"
+              class="w-full bg-fc-dark hover:bg-fc-mid text-white text-xs font-bold uppercase tracking-wider px-4 py-3 rounded-md transition-colors flex items-center justify-center gap-2">
+              <svg id="btn-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+              <span id="btn-text">Reservar mi cupo</span>
+            </button>
+          </form>
+
+          <div id="inscripcion-ok" class="hidden text-center py-4">
+            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg class="w-6 h-6 text-fc-green" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+            </div>
+            <p class="text-sm font-semibold text-fc-dark mb-1">¡Cupo reservado!</p>
+            <p class="text-xs text-fc-muted">Te contactamos en menos de 24 horas al WhatsApp registrado.</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-fc-border p-5">
+          <h3 class="text-fc-dark font-semibold text-sm mb-3">El programa en números</h3>
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between text-xs text-fc-muted mb-1"><span>Básico (36h)</span><span>26%</span></div>
+              <div class="h-1.5 bg-fc-cream rounded-full overflow-hidden"><div class="h-full bg-fc-green rounded-full" style="width:26%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-fc-muted mb-1"><span>Intermedio (50h)</span><span>37%</span></div>
+              <div class="h-1.5 bg-fc-cream rounded-full overflow-hidden"><div class="h-full bg-fc-terra rounded-full" style="width:37%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-fc-muted mb-1"><span>Avanzado (50h)</span><span>37%</span></div>
+              <div class="h-1.5 bg-fc-cream rounded-full overflow-hidden"><div class="h-full bg-fc-green3 rounded-full" style="width:37%"></div></div>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-fc-border flex items-center justify-between text-xs">
+            <span class="text-fc-muted">Total del programa</span>
+            <span class="font-bold text-fc-dark">136 horas</span>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-fc-border p-5">
+          <h3 class="text-fc-dark font-semibold text-sm mb-3">Contacto directo</h3>
+          <div class="space-y-2 text-xs text-fc-mid">
+            <p class="flex items-center gap-2"><svg class="w-4 h-4 text-fc-green flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><a href="tel:+573005580358" class="hover:text-fc-green transition-colors">+57 300 558 0358</a></p>
+            <p class="flex items-center gap-2"><svg class="w-4 h-4 text-fc-green flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><a href="mailto:campo.fabian1@gmail.com" class="hover:text-fc-green transition-colors">campo.fabian1@gmail.com</a></p>
+            <p class="flex items-center gap-2"><svg class="w-4 h-4 text-fc-green flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Pasto, Nariño, Colombia</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div><!-- /view-landing -->
+  <!-- ══════════════════════════════════════════════════════
+       VISTA: ENCUESTA
+  ══════════════════════════════════════════════════════ -->
+  <div class="fc-view" id="view-encuesta">
+
+    <div class="bg-fc-green">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 h-8 flex items-center">
+        <ol class="flex items-center gap-1.5 text-xs text-green-200">
+          <li><button onclick="fcGoView('landing')" class="hover:text-white transition-colors">Inicio</button></li>
+          <li>/</li><li class="text-white font-medium">Encuesta de interés</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="h-1 bg-fc-cream" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20">
+      <div id="progress-bar" class="h-full bg-fc-green" style="width:20%"></div>
+    </div>
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 pt-2">
+      <span id="step-label" class="text-xs text-fc-muted">Paso 1 de 5</span>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 grid lg:grid-cols-3 gap-8">
+
+      <!-- SIDEBAR -->
+      <aside class="hidden lg:block space-y-5">
+        <div class="rounded-xl overflow-hidden relative" style="min-height:220px">
+          <img src="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=500&q=85&fit=crop&crop=faces,top"
+            alt="Profesional colombiana con apuntes"
+            class="w-full object-cover absolute inset-0" style="min-height:220px;height:100%" loading="eager" width="500" height="280">
+          <div class="absolute inset-0 bg-gradient-to-b from-fc-green/80 via-fc-green/60 to-fc-green/80"></div>
+          <div class="absolute inset-0 dot-grid opacity-30"></div>
+          <div class="relative z-10 p-5">
+            <p class="text-green-300 text-xs font-semibold uppercase tracking-widest mb-2">FC Consultores</p>
+            <h2 class="font-display text-xl font-bold text-white leading-tight mb-3">
+              Ayúdanos a<br>diseñar <em class="not-italic text-fc-terra2">tu</em><br>programa ideal
+            </h2>
+            <p class="text-green-100 text-xs leading-relaxed">5 preguntas · 3 minutos · Respuesta personalizada garantizada</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-fc-border p-5">
+          <h3 class="text-fc-dark font-semibold text-sm mb-4">Tu progreso</h3>
+          <ol class="space-y-3">
+            <li class="flex items-center gap-3" id="si-1"><div class="step-dot active flex-shrink-0"></div><span class="text-sm text-fc-dark font-medium">Tu perfil</span></li>
+            <li class="flex items-center gap-3" id="si-2"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Nivel en Excel</span></li>
+            <li class="flex items-center gap-3" id="si-3"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Modalidad y horario</span></li>
+            <li class="flex items-center gap-3" id="si-4"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Inversión</span></li>
+            <li class="flex items-center gap-3" id="si-5"><div class="step-dot flex-shrink-0"></div><span class="text-sm text-fc-muted">Tus datos</span></li>
+          </ol>
+        </div>
+
+        <div class="bg-fc-terra rounded-xl p-4 relative overflow-hidden">
+          <div class="absolute inset-0" style="background-image:radial-gradient(circle,rgba(255,255,255,.15) 1px,transparent 1px);background-size:16px 16px"></div>
+          <blockquote class="relative z-10 text-orange-100 text-xs leading-relaxed italic">
+            "En Nariño también se toman las decisiones con datos. Solo hay que saber leerlos."
+          </blockquote>
+          <p class="relative z-10 text-orange-300 text-[10px] mt-2 font-medium not-italic">— FC Consultores</p>
+        </div>
+      </aside>
+
+      <!-- FORM -->
+      <div class="lg:col-span-2">
+        <form id="survey-form" novalidate>
+
+          <fieldset class="step-section" id="step-1">
+            <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+              <legend class="text-base font-semibold text-fc-dark mb-1 block">Tu perfil profesional</legend>
+              <p class="text-sm text-fc-muted mb-5">Cuéntanos sobre ti para recomendarte el módulo ideal.</p>
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-fc-dark mb-2" for="profesion">¿Cuál es tu profesión o área?</label>
+                <select id="profesion" name="profesion" class="fc-input">
+                  <option value="">Selecciona una opción</option>
+                  <option>Administrador de Empresas</option><option>Contador Público</option><option>Economista</option>
+                  <option>Estudiante universitario</option><option>Gerente o directivo</option><option>Analista financiero</option><option>Otro</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <p class="text-sm font-medium text-fc-dark mb-2">¿Cuál es tu principal objetivo?</p>
+                <div class="space-y-2">
+                  <div><input type="radio" class="fc-check" name="objetivo" id="obj1" value="reportes"><label for="obj1">Optimizar mis reportes financieros</label></div>
+                  <div><input type="radio" class="fc-check" name="objetivo" id="obj2" value="proyectos"><label for="obj2">Evaluar proyectos de inversión (VPN/TIR)</label></div>
+                  <div><input type="radio" class="fc-check" name="objetivo" id="obj3" value="automatizar"><label for="obj3">Automatizar tareas repetitivas con macros</label></div>
+                  <div><input type="radio" class="fc-check" name="objetivo" id="obj4" value="dashboard"><label for="obj4">Crear dashboards ejecutivos</label></div>
+                  <div><input type="radio" class="fc-check" name="objetivo" id="obj5" value="certificacion"><label for="obj5">Obtener una certificación Microsoft</label></div>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button type="button" onclick="encGoStep(2)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="step-section hidden" id="step-2">
+            <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+              <legend class="text-base font-semibold text-fc-dark mb-1 block">Tu nivel actual en Excel</legend>
+              <p class="text-sm text-fc-muted mb-5">Te recomendamos el módulo de entrada correcto.</p>
+              <div class="space-y-2 mb-4">
+                <div><input type="radio" class="fc-check" name="nivel" id="niv1" value="basico"><label for="niv1"><div><div class="font-medium">Básico — Copio, pego y sumo a mano</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 1 (36h)</div></div></label></div>
+                <div><input type="radio" class="fc-check" name="nivel" id="niv2" value="intermedio"><label for="niv2"><div><div class="font-medium">Intermedio — Conozco fórmulas y tablas básicas</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 2 (50h)</div></div></label></div>
+                <div><input type="radio" class="fc-check" name="nivel" id="niv3" value="avanzado"><label for="niv3"><div><div class="font-medium">Avanzado — Uso tablas dinámicas y XLOOKUP</div><div class="text-xs text-fc-muted mt-0.5">Empieza en el Módulo 3 (50h)</div></div></label></div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-fc-dark mb-2" for="horas-semana">¿Cuántas horas pierdes a la semana en tareas manuales de Excel?</label>
+                <select id="horas-semana" name="horas_manuales" class="fc-input">
+                  <option value="">Selecciona</option><option>Menos de 1 hora</option><option>1–3 horas</option><option>3–6 horas</option><option>Más de 6 horas</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-between">
+              <button type="button" onclick="encGoStep(1)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+              <button type="button" onclick="encGoStep(3)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="step-section hidden" id="step-3">
+            <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+              <legend class="text-base font-semibold text-fc-dark mb-1 block">Modalidad y horario preferido</legend>
+              <p class="text-sm text-fc-muted mb-5">Ofrecemos 5 opciones de horario.</p>
+              <div class="mb-5">
+                <p class="text-sm font-medium text-fc-dark mb-2">¿Qué modalidad prefieres?</p>
+                <div class="grid sm:grid-cols-3 gap-2">
+                  <div><input type="radio" class="fc-check" name="modalidad" id="mod1" value="presencial"><label for="mod1" class="justify-center text-center text-sm">Presencial<br><span class="text-xs text-fc-muted font-normal">Pasto</span></label></div>
+                  <div><input type="radio" class="fc-check" name="modalidad" id="mod2" value="virtual"><label for="mod2" class="justify-center text-center text-sm">Virtual<br><span class="text-xs text-fc-muted font-normal">En vivo</span></label></div>
+                  <div><input type="radio" class="fc-check" name="modalidad" id="mod3" value="hibrido"><label for="mod3" class="justify-center text-center text-sm">Híbrido<br><span class="text-xs text-fc-muted font-normal">Ambas</span></label></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-fc-dark mb-2">¿Qué horario te funciona mejor?</p>
+                <div class="space-y-2">
+                  <div><input type="radio" class="fc-check" name="horario" id="h1" value="lm-am"><label for="h1">Lun – Mié · 8:00–11:00 am (Presencial)</label></div>
+                  <div><input type="radio" class="fc-check" name="horario" id="h2" value="lm-pm"><label for="h2">Lun – Mié · 6:00–9:00 pm (Virtual)</label></div>
+                  <div><input type="radio" class="fc-check" name="horario" id="h3" value="mj-pm"><label for="h3">Mar – Jue · 6:00–9:00 pm (Virtual)</label></div>
+                  <div><input type="radio" class="fc-check" name="horario" id="h4" value="vie"><label for="h4">Viernes · 4:00–8:00 pm (Presencial)</label></div>
+                  <div><input type="radio" class="fc-check" name="horario" id="h5" value="sab"><label for="h5"><div class="flex items-center gap-2"><span class="font-semibold">Sábado · 8:00 am–2:00 pm (Híbrido)</span><span class="bg-fc-terra text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Nuevo ★</span></div></label></div>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-between">
+              <button type="button" onclick="encGoStep(2)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+              <button type="button" onclick="encGoStep(4)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="step-section hidden" id="step-4">
+            <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+              <legend class="text-base font-semibold text-fc-dark mb-1 block">Sobre la inversión</legend>
+              <p class="text-sm text-fc-muted mb-5">Nos ayuda a ofrecerte opciones de pago adecuadas.</p>
+              <div class="mb-5">
+                <p class="text-sm font-medium text-fc-dark mb-2">¿Cuánto estarías dispuesto a invertir por módulo?</p>
+                <div class="space-y-2">
+                  <div><input type="radio" class="fc-check" name="precio" id="p1" value="menos100k"><label for="p1">Menos de $100.000 COP</label></div>
+                  <div><input type="radio" class="fc-check" name="precio" id="p2" value="100-200k"><label for="p2">Entre $100.000 y $200.000 COP</label></div>
+                  <div><input type="radio" class="fc-check" name="precio" id="p3" value="200-350k"><label for="p3">Entre $200.000 y $350.000 COP</label></div>
+                  <div><input type="radio" class="fc-check" name="precio" id="p4" value="mas350k"><label for="p4">Más de $350.000 COP si la calidad lo justifica</label></div>
+                </div>
+              </div>
+              <div>
+                <label for="sugerencia" class="block text-sm font-medium text-fc-dark mb-2">¿Alguna sugerencia o tema que te gustaría que incluyéramos?</label>
+                <textarea id="sugerencia" name="sugerencia" rows="3" class="fc-input resize-none" placeholder="Escribe tus sugerencias o preguntas…"></textarea>
+              </div>
+            </div>
+            <div class="flex justify-between">
+              <button type="button" onclick="encGoStep(3)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+              <button type="button" onclick="encGoStep(5)" class="bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">Siguiente →</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="step-section hidden" id="step-5">
+            <div class="bg-white rounded-xl border border-fc-border p-6 mb-4">
+              <legend class="text-base font-semibold text-fc-dark mb-1 block">Tus datos de contacto</legend>
+              <p class="text-sm text-fc-muted mb-5">Te enviamos la recomendación personalizada y detalles del programa.</p>
+              <div class="grid sm:grid-cols-2 gap-4 mb-4">
+                <div><label for="nombre" class="block text-sm font-medium text-fc-dark mb-1.5">Nombre completo <span class="text-red-500">*</span></label><input type="text" id="nombre" name="nombre" class="fc-input" placeholder="Tu nombre" required></div>
+                <div><label for="empresa" class="block text-sm font-medium text-fc-dark mb-1.5">Empresa u organización</label><input type="text" id="empresa" name="empresa" class="fc-input" placeholder="Opcional"></div>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-4 mb-4">
+                <div><label for="telefono" class="block text-sm font-medium text-fc-dark mb-1.5">WhatsApp <span class="text-red-500">*</span></label><input type="tel" id="telefono" name="telefono" class="fc-input" placeholder="+57 300 000 0000" required></div>
+                <div><label for="email" class="block text-sm font-medium text-fc-dark mb-1.5">Correo electrónico <span class="text-red-500">*</span></label><input type="email" id="email" name="email" class="fc-input" placeholder="tu@correo.com" required></div>
+              </div>
+              <div class="mt-4 p-3 bg-fc-cream rounded-lg text-xs text-fc-muted">
+                <strong class="text-fc-dark">Privacidad:</strong> Tus datos solo se usan para enviarte información del programa. Nunca se comparten con terceros.
+              </div>
+            </div>
+            <div class="flex justify-between">
+              <button type="button" onclick="encGoStep(4)" class="border border-fc-border text-fc-mid text-sm px-5 py-2.5 rounded-md hover:bg-fc-cream transition-colors">← Anterior</button>
+              <button type="submit" id="btn-enviar" class="bg-fc-green text-white font-semibold text-sm px-8 py-2.5 rounded-md hover:bg-fc-green2 transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+                <span id="btn-enviar-txt">Enviar encuesta</span>
+              </button>
+            </div>
+          </fieldset>
+
+          <div class="hidden text-center py-10" id="step-success" role="status" aria-live="polite">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+              <svg class="w-8 h-8 text-fc-green" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+            </div>
+            <h2 class="font-display text-2xl font-bold text-fc-dark mb-2">¡Gracias por responder!</h2>
+            <p class="text-fc-muted text-sm mb-2 max-w-sm mx-auto">Tus respuestas quedaron guardadas. En menos de 24 horas te enviamos la recomendación personalizada y los detalles del módulo ideal para ti.</p>
+            <p id="firebase-id" class="text-xs text-fc-muted/60 mb-6"></p>
+            <button onclick="fcGoView('landing')" class="inline-block bg-fc-green text-white font-semibold text-sm px-6 py-2.5 rounded-md hover:bg-fc-green2 transition-colors">
+              Ver el programa completo →
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div><!-- /view-encuesta -->
+
+</main>
+
+<footer class="bg-fc-dark text-white mt-12">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid sm:grid-cols-3 gap-8">
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-8 h-8 rounded-md bg-fc-green flex items-center justify-center text-white font-bold text-sm">FC</span>
+        <span class="font-semibold">FC Consultores</span>
+      </div>
+      <p class="text-gray-400 text-xs leading-relaxed">Formación financiera práctica para administradores y contadores del sur de Colombia.</p>
+    </div>
+    <nav aria-label="Pie de página">
+      <h4 class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Programa</h4>
+      <ul class="space-y-1.5 text-sm text-gray-300">
+        <li><button onclick="fcGoView('landing')" class="hover:text-white transition-colors">Módulos</button></li>
+        <li><button onclick="fcGoView('landing');setTimeout(()=>document.getElementById('inscripcion').scrollIntoView({behavior:'smooth'}),100)" class="hover:text-white transition-colors">Inscribirse</button></li>
+        <li><button onclick="fcGoView('encuesta')" class="hover:text-white transition-colors">Encuesta de interés</button></li>
+      </ul>
+    </nav>
+    <div>
+      <h4 class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Contacto</h4>
+      <ul class="space-y-1.5 text-sm text-gray-300">
+        <li><a href="tel:+573005580358" class="hover:text-white transition-colors">300 558 0358</a></li>
+        <li><a href="mailto:campo.fabian1@gmail.com" class="hover:text-white transition-colors">campo.fabian1@gmail.com</a></li>
+        <li class="text-gray-500 text-xs mt-2">Pasto, Nariño · Colombia · 2025</li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between text-xs text-gray-600">
+      <span>© 2025 FC Consultores y Asesores Financieros</span>
+      <span>Sitio unificado — todo en una página</span>
+    </div>
+  </div>
+</footer>
+<!-- ══ ADMIN FAB ══ -->
+<button id="admin-fab" onclick="adminOpen()" aria-label="Abrir panel admin" title="Panel Admin">
+  <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+</button>
+<div id="admin-overlay" onclick="adminClose()"></div>
+<div id="admin-login">
+  <div style="background:#fff;border-radius:16px;padding:32px;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="width:36px;height:36px;background:#1A1A1A;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">FC</span>
+      <div><div style="font-weight:700;font-size:15px;color:#111">Panel Admin</div><div style="font-size:12px;color:#6b7280">FC Consultores</div></div>
+    </div>
+    <label style="display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:6px">Contraseña</label>
+    <input type="password" id="admin-pass" placeholder="••••••••"
+      style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:14px;margin-bottom:12px;box-sizing:border-box;outline:none"
+      onkeydown="if(event.key==='Enter')adminLogin()"
+      onfocus="this.style.borderColor='#1F5C2E'" onblur="this.style.borderColor='#e5e7eb'">
+    <p id="admin-err" style="color:#dc2626;font-size:12px;margin-bottom:10px;display:none">Contraseña incorrecta</p>
+    <button onclick="adminLogin()" style="width:100%;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px">Entrar →</button>
+    <button onclick="document.getElementById('admin-login').classList.remove('show')" style="width:100%;background:transparent;border:1px solid #e5e7eb;border-radius:8px;padding:10px;font-size:13px;color:#6b7280;cursor:pointer">Cancelar</button>
+  </div>
+</div>
+<div id="admin-drawer">
+  <div style="background:#1A1A1A;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:32px;height:32px;background:#1F5C2E;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px">FC</span>
+      <div><div style="color:#fff;font-weight:700;font-size:14px">Panel Admin</div><div style="color:#9ca3af;font-size:11px" id="adm-last-update">Cargando...</div></div>
+    </div>
+    <button onclick="adminClose()" style="background:rgba(255,255,255,.1);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px">✕</button>
+  </div>
+  <div style="padding:16px 20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="adm-stat"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:4px">Inscripciones</div><div id="adm-cnt-ins" style="font-size:26px;font-weight:700;color:#1F5C2E">—</div></div>
+      <div class="adm-stat"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:4px">Encuestas</div><div id="adm-cnt-enc" style="font-size:26px;font-weight:700;color:#C2461A">—</div></div>
+      <div class="adm-stat"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:4px">Clics</div><div id="adm-cnt-int" style="font-size:26px;font-weight:700;color:#3b82f6">—</div></div>
+    </div>
+    <div style="display:flex;gap:4px;background:#f3f4f6;padding:4px;border-radius:10px;margin-bottom:16px">
+      <button class="adm-tab active" onclick="admTab('ins',this)">Inscripciones</button>
+      <button class="adm-tab" onclick="admTab('enc',this)">Encuestas</button>
+      <button class="adm-tab" onclick="admTab('int',this)">Clics</button>
+    </div>
+    <div class="adm-sec active" id="adm-ins">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button onclick="admExport('inscripciones')" style="background:#1F5C2E;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">↓ Exportar CSV</button>
+      </div>
+      <div id="adm-loading-ins" style="text-align:center;padding:30px;color:#9ca3af;font-size:13px">Cargando...</div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;background:#fff">
+        <table class="adm-table"><thead><tr><th>Nombre</th><th>Email</th><th>WhatsApp</th><th>Módulo</th><th>Fecha</th></tr></thead><tbody id="adm-tbody-ins"></tbody></table>
+      </div>
+    </div>
+    <div class="adm-sec" id="adm-enc">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px"><div style="font-size:10px;color:#166534;font-weight:600;margin-bottom:2px">NIVEL TOP</div><div id="adm-stat-nivel" style="font-weight:700;color:#15803d;font-size:13px">—</div></div>
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px"><div style="font-size:10px;color:#9a3412;font-weight:600;margin-bottom:2px">HORARIO TOP</div><div id="adm-stat-horario" style="font-weight:700;color:#c2410c;font-size:13px">—</div></div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px"><div style="font-size:10px;color:#1e40af;font-weight:600;margin-bottom:2px">PRECIO TOP</div><div id="adm-stat-precio" style="font-weight:700;color:#1d4ed8;font-size:13px">—</div></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button onclick="admExport('encuestas')" style="background:#C2461A;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">↓ Exportar CSV</button>
+      </div>
+      <div id="adm-loading-enc" style="text-align:center;padding:30px;color:#9ca3af;font-size:13px">Cargando...</div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;background:#fff">
+        <table class="adm-table"><thead><tr><th>Nombre</th><th>Email</th><th>WhatsApp</th><th>Nivel</th><th>Horario</th><th>Precio</th><th>Fecha</th></tr></thead><tbody id="adm-tbody-enc"></tbody></table>
+      </div>
+    </div>
+    <div class="adm-sec" id="adm-int">
+      <div id="adm-clics-list" style="background:#fff;border-radius:10px;border:1px solid #e5e7eb;padding:16px"><p style="color:#9ca3af;font-size:13px">Cargando...</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// VIEW SWITCHER (sin recargar página)
+// ══════════════════════════════════════════════════════
+function fcGoView(name) {
+  document.querySelectorAll('.fc-view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('#main-nav-pills .nav-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.view === name);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  history.replaceState(null, '', '#' + name);
+}
+// Cargar vista desde el hash de la URL al iniciar
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash.replace('#','');
+  if (hash === 'encuesta' || hash === 'landing') fcGoView(hash);
+});
+
+// ══════════════════════════════════════════════════════
+// SCROLL REVEAL
+// ══════════════════════════════════════════════════════
+const fcObs = new IntersectionObserver((es) => {
+  es.forEach(e => {
+    if (e.isIntersecting) {
+      const d = parseInt(e.target.dataset.delay || 0);
+      setTimeout(() => e.target.classList.add('visible'), d);
+      fcObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(e => fcObs.observe(e));
+
+// ══════════════════════════════════════════════════════
+// CAROUSEL DOTS
+// ══════════════════════════════════════════════════════
+document.querySelectorAll('.dot-nav').forEach(nav => {
+  nav.querySelectorAll('button').forEach((d, i, all) => {
+    d.addEventListener('click', () => { all.forEach(b => b.classList.remove('active')); d.classList.add('active'); });
+  });
+});
+
+// ══════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════
+function showToast(msg, ok = true) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<div class="flex items-center gap-3 bg-white border ${ok?'border-green-200':'border-red-200'} rounded-xl shadow-xl px-4 py-3 text-sm font-medium ${ok?'text-green-800':'text-red-800'}">
+    <svg class="w-5 h-5 flex-shrink-0 ${ok?'text-green-500':'text-red-500'}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">${ok?'<path d="M20 6L9 17l-5-5"/>':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'}</svg>${msg}</div>`;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4500);
+}
+
+// ══════════════════════════════════════════════════════
+// FORM: INSCRIPCIÓN (landing)
+// ══════════════════════════════════════════════════════
+document.getElementById('form-inscripcion').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nombre   = document.getElementById('ins-nombre').value.trim();
+  const telefono = document.getElementById('ins-telefono').value.trim();
+  const email    = document.getElementById('ins-email').value.trim();
+  const modulo   = document.getElementById('ins-modulo').value;
+
+  let valid = true;
+  if (!nombre)   { document.getElementById('err-nombre').classList.remove('hidden');   document.getElementById('ins-nombre').classList.add('error');   valid=false; } else { document.getElementById('err-nombre').classList.add('hidden');   document.getElementById('ins-nombre').classList.remove('error'); }
+  if (!telefono) { document.getElementById('err-telefono').classList.remove('hidden'); document.getElementById('ins-telefono').classList.add('error'); valid=false; } else { document.getElementById('err-telefono').classList.add('hidden'); document.getElementById('ins-telefono').classList.remove('error'); }
+  if (!email || !email.includes('@')) { document.getElementById('err-email').classList.remove('hidden'); document.getElementById('ins-email').classList.add('error'); valid=false; } else { document.getElementById('err-email').classList.add('hidden'); document.getElementById('ins-email').classList.remove('error'); }
+  if (!valid) return;
+
+  const btn = document.getElementById('btn-inscripcion');
+  document.getElementById('btn-text').textContent = 'Guardando…';
+  btn.disabled = true;
+
+  const res = await window.FC?.guardarInscripcion({ nombre, telefono, email, modulo }) ?? { ok:false, err:'Firebase no inicializado' };
+
+  if (res.ok) {
+    document.getElementById('form-inscripcion').classList.add('hidden');
+    document.getElementById('inscripcion-ok').classList.remove('hidden');
+    showToast('¡Cupo reservado! Te contactamos pronto.');
+  } else {
+    document.getElementById('btn-text').textContent = 'Reservar mi cupo';
+    btn.disabled = false;
+    showToast('Error al guardar. Intenta de nuevo o escríbenos al WhatsApp.', false);
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// ENCUESTA: STEP MANAGEMENT
+// ══════════════════════════════════════════════════════
+const ENC_TOTAL = 5;
+let encCur = 1;
+const encAnswers = {};
+
+function encGoStep(n) {
+  document.getElementById(`step-${encCur}`).classList.add('hidden');
+  encCur = n;
+
+  if (n > ENC_TOTAL) {
+    const f = document.getElementById('survey-form');
+    ['profesion','nivel','horas_manuales','modalidad','horario','precio','sugerencia'].forEach(k => {
+      const el = f.elements[k];
+      if (!el) return;
+      if (el.type === 'radio' || el.type === 'checkbox') {
+        const checked = f.querySelectorAll(`[name="${k}"]:checked`);
+        if (checked.length) encAnswers[k] = checked[0].value;
+      } else if (el.value) { encAnswers[k] = el.value; }
+    });
+    encSubmit();
+    return;
+  }
+
+  document.getElementById(`step-${n}`).classList.remove('hidden');
+  const pct = Math.round((n/ENC_TOTAL)*100);
+  document.getElementById('progress-bar').style.width = pct+'%';
+  document.getElementById('step-label').textContent = `Paso ${n} de ${ENC_TOTAL}`;
+
+  for (let i=1;i<=ENC_TOTAL;i++) {
+    const dot = document.querySelector(`#si-${i} .step-dot`);
+    const lbl = document.querySelector(`#si-${i} span`);
+    if (!dot) continue;
+    dot.classList.remove('active','done');
+    if (i<n)      { dot.classList.add('done'); lbl.className='text-sm text-fc-dark font-medium'; }
+    else if (i===n){ dot.classList.add('active'); lbl.className='text-sm text-fc-dark font-medium'; }
+    else           { lbl.className='text-sm text-fc-muted'; }
+  }
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+async function encSubmit() {
+  const nombre   = document.getElementById('nombre').value.trim();
+  const telefono = document.getElementById('telefono').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const empresa  = document.getElementById('empresa').value.trim();
+
+  if (!nombre || !telefono || !email) {
+    alert('Por favor completa los campos obligatorios (nombre, WhatsApp y correo).');
+    encGoStep(5); return;
+  }
+
+  const btn = document.getElementById('btn-enviar');
+  document.getElementById('btn-enviar-txt').textContent = 'Guardando…';
+  btn.disabled = true;
+
+  const payload = { ...encAnswers, nombre, telefono, email };
+  if (empresa) payload.empresa = empresa;
+
+  const res = await window.FC?.guardarEncuesta(payload) ?? { ok:false, err:'Firebase no cargado aún' };
+
+  if (res.ok) {
+    document.getElementById('step-success').classList.remove('hidden');
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('step-label').textContent = '¡Completado!';
+    if (res.id) document.getElementById('firebase-id').textContent = `Referencia: ${res.id}`;
+    window.scrollTo({ top:0, behavior:'smooth' });
+  } else {
+    document.getElementById('btn-enviar-txt').textContent = 'Enviar encuesta';
+    btn.disabled = false;
+    alert('Error al guardar. Por favor intenta de nuevo o escríbenos al WhatsApp 300 558 0358.');
+  }
+}
+
+document.getElementById('survey-form').addEventListener('submit', e => { e.preventDefault(); encGoStep(6); });
+
+// ══════════════════════════════════════════════════════
+// ADMIN PANEL
+// ══════════════════════════════════════════════════════
+const ADM_PASS = 'cesmagadmin*';
+
+function adminOpen() {
+  if (sessionStorage.getItem('fc_admin') === ADM_PASS) { openDrawer(); }
+  else {
+    document.getElementById('admin-login').classList.add('show');
+    setTimeout(() => document.getElementById('admin-pass').focus(), 100);
+  }
+}
+function adminLogin() {
+  const p = document.getElementById('admin-pass').value;
+  if (p === ADM_PASS) {
+    sessionStorage.setItem('fc_admin', ADM_PASS);
+    document.getElementById('admin-login').classList.remove('show');
+    document.getElementById('admin-pass').value = '';
+    document.getElementById('admin-err').style.display = 'none';
+    openDrawer();
+  } else {
+    document.getElementById('admin-err').style.display = 'block';
+    document.getElementById('admin-pass').select();
+  }
+}
+function openDrawer() {
+  document.getElementById('admin-drawer').classList.add('open');
+  document.getElementById('admin-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  admLoadAll();
+}
+function adminClose() {
+  document.getElementById('admin-drawer').classList.remove('open');
+  document.getElementById('admin-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function admTab(name, btn) {
+  document.querySelectorAll('.adm-sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.adm-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('adm-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+function admTimeAgo(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds*1000 : ts);
+  const diff = Math.floor((Date.now()-d)/1000);
+  if (diff<60) return 'Hace un momento';
+  if (diff<3600) return `Hace ${Math.floor(diff/60)} min`;
+  if (diff<86400) return `Hace ${Math.floor(diff/3600)} h`;
+  return d.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+}
+function admBadge(val, color) {
+  const colors = { green:'background:#dcfce7;color:#166534', orange:'background:#ffedd5;color:#9a3412', blue:'background:#dbeafe;color:#1e40af', gray:'background:#f3f4f6;color:#4b5563' };
+  return `<span class="adm-badge" style="${colors[color]||colors.gray}">${val||'—'}</span>`;
+}
+async function admLoadAll() {
+  if (!window.FC_DB || !window.FC_firestore) return;
+  const { collection, getDocs, query, orderBy, limit } = window.FC_firestore;
+
+  const insSnap = await getDocs(query(collection(window.FC_DB,'inscripciones'), orderBy('timestamp','desc'), limit(200)));
+  const insRows = []; insSnap.forEach(d => insRows.push({id:d.id,...d.data()}));
+  document.getElementById('adm-cnt-ins').textContent = insRows.length;
+  document.getElementById('adm-loading-ins').style.display = 'none';
+  document.getElementById('adm-tbody-ins').innerHTML = insRows.length ? insRows.map(r => `<tr>
+    <td style="font-weight:500">${r.nombre||'—'}</td><td>${r.email||'—'}</td><td>${r.telefono||'—'}</td>
+    <td>${admBadge(r.modulo, r.modulo==='basico'?'green':r.modulo==='intermedio'?'orange':r.modulo==='avanzado'?'blue':'gray')}</td>
+    <td style="color:#9ca3af;font-size:12px">${admTimeAgo(r.timestamp)}</td></tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">Sin registros aún</td></tr>';
+
+  const encSnap = await getDocs(query(collection(window.FC_DB,'encuestas'), orderBy('timestamp','desc'), limit(200)));
+  const encRows = []; encSnap.forEach(d => encRows.push({id:d.id,...d.data()}));
+  document.getElementById('adm-cnt-enc').textContent = encRows.length;
+  document.getElementById('adm-loading-enc').style.display = 'none';
+
+  const niveles={}, horarios={}, precios={};
+  encRows.forEach(r => { if(r.nivel) niveles[r.nivel]=(niveles[r.nivel]||0)+1; if(r.horario) horarios[r.horario]=(horarios[r.horario]||0)+1; if(r.precio) precios[r.precio]=(precios[r.precio]||0)+1; });
+  const top = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1])[0];
+  const tn=top(niveles), th=top(horarios), tp=top(precios);
+  document.getElementById('adm-stat-nivel').textContent   = tn?`${tn[0]} (${tn[1]})`:'—';
+  document.getElementById('adm-stat-horario').textContent = th?`${th[0]} (${th[1]})`:'—';
+  document.getElementById('adm-stat-precio').textContent  = tp?`${tp[0]} (${tp[1]})`:'—';
+
+  document.getElementById('adm-tbody-enc').innerHTML = encRows.length ? encRows.map(r => `<tr>
+    <td style="font-weight:500">${r.nombre||'—'}</td><td>${r.email||'—'}</td><td>${r.telefono||'—'}</td>
+    <td>${admBadge(r.nivel, r.nivel==='basico'?'green':r.nivel==='intermedio'?'orange':'blue')}</td>
+    <td style="font-size:12px">${r.horario||'—'}</td><td style="font-size:12px">${r.precio||'—'}</td>
+    <td style="color:#9ca3af;font-size:12px">${admTimeAgo(r.timestamp)}</td></tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af">Sin encuestas aún</td></tr>';
+
+  const intSnap = await getDocs(query(collection(window.FC_DB,'interacciones'), orderBy('timestamp','desc'), limit(100)));
+  const clics = {}; let totalInt = 0;
+  intSnap.forEach(d => { const r=d.data(); const k=`${r.modulo}/${r.sesion}`; clics[k]=(clics[k]||0)+1; totalInt++; });
+  document.getElementById('adm-cnt-int').textContent = totalInt;
+  const sorted = Object.entries(clics).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('adm-clics-list').innerHTML = sorted.length ? sorted.map(([k,v]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6">
+      <span style="font-size:13px;color:#374151">${k}</span>
+      <span style="font-size:11px;font-weight:700;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:100px">${v}</span>
+    </div>`).join('') : '<p style="color:#9ca3af;font-size:13px">Sin clics registrados aún</p>';
+
+  document.getElementById('adm-last-update').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CO');
+}
+async function admExport(col) {
+  if (!window.FC_DB || !window.FC_firestore) { alert('Firebase no disponible'); return; }
+  const { collection, getDocs } = window.FC_firestore;
+  const snap = await getDocs(collection(window.FC_DB, col));
+  const rows = []; snap.forEach(d => rows.push(d.data()));
+  if (!rows.length) { alert('Sin datos para exportar'); return; }
+  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k=>k!=='timestamp');
+  const header = [...keys,'fecha'].join(',');
+  const lines = rows.map(r => {
+    const fecha = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-CO') : '';
+    return [...keys.map(k=>`"${(r[k]||'').toString().replace(/"/g,'""')}"`), `"${fecha}"`].join(',');
+  });
+  const blob = new Blob(['\ufeff'+[header,...lines].join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download = `fc-${col}-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') adminClose(); });
+</script>
+</body>
+</html>
